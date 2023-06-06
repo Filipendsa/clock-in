@@ -12,13 +12,10 @@ import pandas as pd
 def createTable():
     cursor = db.cursor()
     cursor.execute("""
-        CREATE DATABASE IF NOT EXISTS ClockIn
-    """)
-    cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INT AUTO_INCREMENT PRIMARY KEY,
             username VARCHAR(255) NOT NULL,
-            senha VARCHAR(255) NOT NULL,
+            password VARCHAR(255) NOT NULL,
             type INT(1) NOT NULL
         )
     """)
@@ -99,7 +96,7 @@ def ISignIn():
                                                                             entry_username.get(), entry_password.get()))
     button_login.pack()
 
-    button_cadastrar = ttk.Button(frame, text="Cadastrar", command=lambda: [
+    button_cadastrar = ttk.Button(frame, text="Novo por aqui? Cadastre-se!", command=lambda: [
                                   window.destroy(), ISignUp()])
     button_cadastrar.pack()
 
@@ -236,5 +233,5 @@ db = mysql.connector.connect(
     database='ClockIn'
 )
 createTable()
-
+createUser('admin', 'admin', 1)
 ISignIn()
