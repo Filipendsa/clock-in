@@ -8,31 +8,25 @@ from datetime import datetime
 import pandas as pd
 import secrets
 import string
-from dotenv import load_dotenv
+from decouple import config
+from enum.typeEnum import EnrollmentType
 
-# Load environment variables from the .env file
-load_dotenv()
-
-# Conexão com o banco de dados MySQL
-# Connect to the database
 script_dir = os.path.dirname(os.path.abspath(__file__))
-
-# Constrói o caminho relativo para o arquivo de certificado
 cert_path = os.path.join(script_dir, "..", "ssl", "cacert.pem")
 
+# Carrega as variáveis de ambiente do arquivo .env
 
 db = MySQLdb.connect(
-    host=os.getenv("DB_HOST"),
-    user=os.getenv("DB_USERNAME"),
-    passwd=os.getenv("DB_PASSWORD"),
-    db=os.getenv("DB_NAME"),
+    host=config('DB_HOST'),
+    user=config('DB_USERNAME'),
+    passwd=config('DB_PASSWORD'),
+    db=config('DB_NAME'),
     autocommit=True,
     ssl_mode="VERIFY_IDENTITY",
     ssl={
         "ca": cert_path
     }
 )
-
 
 # Função para criar a tabela, se ainda não existir
 
@@ -44,24 +38,24 @@ def createTable():
             id INT AUTO_INCREMENT PRIMARY KEY,
             peopleName VARCHAR(255) NOT NULL,
             password VARCHAR(255) NOT NULL,
-            accessToken NVARCHAR(255) NOT NULL,
-            type INT(1) NOT NULL
-        )
+            accessToken NVARCHAR(255) NOT NULL
+        ) ENGINE=InnoDB;
     """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS entity (
             id INT AUTO_INCREMENT PRIMARY KEY,
             entityName VARCHAR(255) NOT NULL
-        )
+        ) ENGINE=InnoDB;
     """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS enrollment (
             id INT AUTO_INCREMENT PRIMARY KEY,
             idPeople INT NOT NULL,
             idEntity INT NOT NULL,
+            type ENUM('isAdmin', 'isManager', 'isEmployee') NOT NULL,
             FOREIGN KEY (idPeople) REFERENCES people(id),
             FOREIGN KEY (idEntity) REFERENCES entity(id)
-        )
+        ) ENGINE=InnoDB;
     """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS clockIn (
@@ -69,7 +63,7 @@ def createTable():
             idEnrollment INT NOT NULL,
             date VARCHAR(255) NOT NULL,
             FOREIGN KEY (idEnrollment) REFERENCES enrollment(id)
-        )
+        ) ENGINE=InnoDB;
     """)
     db.commit()
 
@@ -93,14 +87,25 @@ def createUser(peopleName, password, user_type):
     # Hash da senha usando bcrypt
     hashed_password = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
 
+    # Obtenha o valor ENUM correspondente ao tipo de usuário
+    user_type_enum = EnrollmentType(user_type).name
+
     cursor.execute(
-        "INSERT INTO people (peopleName, password, accessToken, type) VALUES (%s, %s, %s, %s)",
-        (peopleName, hashed_password, access_token, user_type)
+        "INSERT INTO people (peopleName, password, accessToken) VALUES (%s, %s, %s)",
+        (peopleName, hashed_password, access_token)
     )
     db.commit()
 
-    print("Usuário criado com sucesso!")
+    # Obtenha o ID do usuário recém-criado
+    cursor.execute("SELECT LAST_INSERT_ID()")
+    user_id = cursor.fetchone()[0]
 
+    # Insira a entrada na tabela enrollment
+    cursor.execute(
+        "INSERT INTO enrollment (idPeople, idEntity, type) VALUES (%s, %s, %s)",
+        (user_id, 0, user_type_enum)  # Use 0 como o ID da entidade por padrão
+    )
+    db.commit()
 # Função para verificar se as credenciais de login são válidas
 
 
