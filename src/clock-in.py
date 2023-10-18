@@ -9,10 +9,11 @@ import pandas as pd
 import secrets
 import string
 from decouple import config
-from enum.typeEnum import EnrollmentType
+from enuns.typeEnum import EnrollmentType
 
-script_dir = os.path.dirname(os.path.abspath(__file__))
-cert_path = os.path.join(script_dir, "..", "ssl", "cacert.pem")
+project_dir = os.path.dirname(os.path.abspath(__file__))
+cert_path = os.path.join(project_dir, "..", "ssl", "cacert.pem")
+sql_file = os.path.join(project_dir, "sqls", "create_tables.sql")
 
 # Carrega as variáveis de ambiente do arquivo .env
 
@@ -32,40 +33,11 @@ db = MySQLdb.connect(
 
 
 def createTable():
-    cursor = db.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS people (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            peopleName VARCHAR(255) NOT NULL,
-            password VARCHAR(255) NOT NULL,
-            accessToken NVARCHAR(255) NOT NULL
-        ) ENGINE=InnoDB;
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS entity (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            entityName VARCHAR(255) NOT NULL
-        ) ENGINE=InnoDB;
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS enrollment (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            idPeople INT NOT NULL,
-            idEntity INT NOT NULL,
-            type ENUM('isAdmin', 'isManager', 'isEmployee') NOT NULL,
-            FOREIGN KEY (idPeople) REFERENCES people(id),
-            FOREIGN KEY (idEntity) REFERENCES entity(id)
-        ) ENGINE=InnoDB;
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS clockIn (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            idEnrollment INT NOT NULL,
-            date VARCHAR(255) NOT NULL,
-            FOREIGN KEY (idEnrollment) REFERENCES enrollment(id)
-        ) ENGINE=InnoDB;
-    """)
-    db.commit()
+    with open(sql_file, 'r') as sql_script:
+        cursor = db.cursor()
+        for statement in sql_script.read().split(';'):
+            cursor.execute(statement)
+
 
 # Função para criar um novo usuário no banco de dados
 
@@ -114,22 +86,22 @@ def authUser(window, peopleName, password):
 
     cursor.execute(
         "SELECT id, type, password, accessToken FROM people WHERE peopleName = %s", (peopleName,))
-    resultado = cursor.fetchone()
+    result = cursor.fetchone()
 
-    if resultado is not None:
+    if result is not None:
         # Verificar a senha usando bcrypt
-        if bcrypt.checkpw(password.encode("utf-8"), resultado[2].encode("utf-8")):
+        if bcrypt.checkpw(password.encode("utf-8"), result[2].encode("utf-8")):
             messagebox.showinfo("Login", "Login bem-sucedido!")
             window.destroy()  # Fechar a janela de login
             # Passar o id e o tipo do usuário, bem como o accessToken
-            if resultado[1] == 0:  # Admin
-                showDashboard(resultado[0], resultado[1], resultado[3])
-            elif resultado[1] == 1:  # Funcionário
+            if result[1] == 0:  # Admin
+                showDashboard(result[0], result[1], result[3])
+            elif result[1] == 1:  # Funcionário
                 showEmployeeDashboard(
-                    window, resultado[0], resultado[1], resultado[3])
-            elif resultado[1] == 2:  # Gestor
+                    window, result[0], result[1], result[3])
+            elif result[1] == 2:  # Gestor
                 showManagerDashboard(
-                    window, resultado[0], resultado[1], resultado[3])
+                    window, result[0], result[1], result[3])
         else:
             messagebox.showerror("Login", "Senha incorreta!")
     else:
@@ -381,4 +353,4 @@ def generateAccessToken():
 # Chama a função createTable() para criar as tabelas no banco de dados
 createTable()
 # Chama a função ISignIn() para iniciar o aplicativo
-ISignIn()
+# ISignIn()
