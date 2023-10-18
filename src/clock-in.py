@@ -13,7 +13,6 @@ from enuns.typeEnum import EnrollmentType
 
 project_dir = os.path.dirname(os.path.abspath(__file__))
 cert_path = os.path.join(project_dir, "..", "ssl", "cacert.pem")
-sql_file = os.path.join(project_dir, "sqls", "create_tables.sql")
 
 # Carrega as variáveis de ambiente do arquivo .env
 
@@ -30,13 +29,6 @@ db = MySQLdb.connect(
 )
 
 # Função para criar a tabela, se ainda não existir
-
-
-def createTable():
-    with open(sql_file, 'r') as sql_script:
-        cursor = db.cursor()
-        for statement in sql_script.read().split(';'):
-            cursor.execute(statement)
 
 
 # Função para criar um novo usuário no banco de dados
@@ -350,7 +342,5 @@ def generateAccessToken():
     return token
 
 
-# Chama a função createTable() para criar as tabelas no banco de dados
-createTable()
 # Chama a função ISignIn() para iniciar o aplicativo
-# ISignIn()
+ISignIn()
