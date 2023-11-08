@@ -1,20 +1,18 @@
+import secrets
+import string
 import MySQLdb
 import os
 import tkinter as tk
 from tkinter import ttk
 from tkinter import messagebox
 import bcrypt
-from datetime import datetime
 import pandas as pd
-import secrets
-import string
+import openpyxl
 from decouple import config
 from enuns.typeEnum import EnrollmentType
 
 project_dir = os.path.dirname(os.path.abspath(__file__))
 cert_path = os.path.join(project_dir, "..", "ssl", "cacert.pem")
-
-# Carrega as variáveis de ambiente do arquivo .env
 
 db = MySQLdb.connect(
     host=config('DB_HOST'),
@@ -28,30 +26,22 @@ db = MySQLdb.connect(
     }
 )
 
-# Função para criar a tabela, se ainda não existir
 
-
-# Função para criar um novo usuário no banco de dados
-
-
-def createUser(peopleName, password, user_type):
+def createUser(peopleName, password, user_type, access_token, idEntity, is_admin=False):
     cursor = db.cursor()
 
-    # Verifica se o nome de usuário já existe no banco de dados
-    cursor.execute("SELECT * FROM people WHERE peopleName = %s", (peopleName,))
-    existing_user = cursor.fetchone()
+    if is_admin:
+        cursor.execute(
+            "SELECT * FROM people p INNER JOIN enrollment e on e.idPeople = p.id WHERE peopleName = %s AND p.accessToken = %s",
+            (peopleName, access_token)
+        )
+        existing_user = cursor.fetchone()
 
-    if existing_user:
-        print("Nome de usuário já existe. Não é possível criar o usuário.")
-        return
+        if existing_user:
+            print("Usuário já existe. Não é possível criar o usuário.")
+            return
 
-    # Gere um token de acesso (accessToken)
-    access_token = generateAccessToken()
-
-    # Hash da senha usando bcrypt
     hashed_password = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
-
-    # Obtenha o valor ENUM correspondente ao tipo de usuário
     user_type_enum = EnrollmentType(user_type).name
 
     cursor.execute(
@@ -60,38 +50,34 @@ def createUser(peopleName, password, user_type):
     )
     db.commit()
 
-    # Obtenha o ID do usuário recém-criado
     cursor.execute("SELECT LAST_INSERT_ID()")
     user_id = cursor.fetchone()[0]
 
-    # Insira a entrada na tabela enrollment
     cursor.execute(
         "INSERT INTO enrollment (idPeople, idEntity, type) VALUES (%s, %s, %s)",
-        (user_id, 0, user_type_enum)  # Use 0 como o ID da entidade por padrão
+        (user_id, idEntity, user_type_enum)
     )
     db.commit()
-# Função para verificar se as credenciais de login são válidas
 
 
-def authUser(window, peopleName, password):
+def authUser(window, access_token, password):
     cursor = db.cursor()
 
     cursor.execute(
-        "SELECT id, type, password, accessToken FROM people WHERE peopleName = %s", (peopleName,))
+        "SELECT id, password, accessToken FROM people WHERE accessToken = %s", (access_token))
     result = cursor.fetchone()
 
     if result is not None:
-        # Verificar a senha usando bcrypt
         if bcrypt.checkpw(password.encode("utf-8"), result[2].encode("utf-8")):
             messagebox.showinfo("Login", "Login bem-sucedido!")
-            window.destroy()  # Fechar a janela de login
-            # Passar o id e o tipo do usuário, bem como o accessToken
-            if result[1] == 0:  # Admin
+            window.destroy()
+
+            if result[1] == 0:
                 showDashboard(result[0], result[1], result[3])
-            elif result[1] == 1:  # Funcionário
+            elif result[1] == 1:
                 showEmployeeDashboard(
                     window, result[0], result[1], result[3])
-            elif result[1] == 2:  # Gestor
+            elif result[1] == 2:
                 showManagerDashboard(
                     window, result[0], result[1], result[3])
         else:
@@ -99,14 +85,11 @@ def authUser(window, peopleName, password):
     else:
         messagebox.showerror("Login", "Usuário não encontrado.")
 
-# Função para criar a interface de login
-
 
 def ISignIn():
     window = tk.Tk()
     window.title("Login")
 
-    # Estilo dos widgets usando ttk
     style = ttk.Style()
     style.configure("TLabel", font=("Arial", 12))
     style.configure("TEntry", font=("Arial", 12))
@@ -115,11 +98,11 @@ def ISignIn():
     frame = ttk.Frame(window, padding=20)
     frame.pack()
 
-    label_peopleName = ttk.Label(frame, text="Usuário:")
-    label_peopleName.pack()
+    label_accessToken = ttk.Label(frame, text="Código de acesso:")
+    label_accessToken.pack()
 
-    entry_peopleName = ttk.Entry(frame)
-    entry_peopleName.pack()
+    entry_accessToken = ttk.Entry(frame)
+    entry_accessToken.pack()
 
     label_password = ttk.Label(frame, text="Senha:")
     label_password.pack()
@@ -128,19 +111,16 @@ def ISignIn():
     entry_password.pack()
 
     button_login = ttk.Button(frame, text="Login", command=lambda: authUser(
-        window, entry_peopleName.get(), entry_password.get()))
+        window, entry_accessToken.get(), entry_password.get()))
     button_login.pack()
 
     window.mainloop()
-
-# Função para criar a interface de cadastro
 
 
 def ISignUp():
     window = tk.Tk()
     window.title("Cadastro")
 
-    # Estilo dos widgets usando ttk
     style = ttk.Style()
     style.configure("TLabel", font=("Arial", 12))
     style.configure("TEntry", font=("Arial", 12))
@@ -167,14 +147,11 @@ def ISignUp():
 
     window.mainloop()
 
-# Função para abrir o dashboard após o login
-
 
 def showDashboard(user_id, user_type, access_token):
     window = tk.Tk()
     window.title("Dashboard")
 
-    # Estilo dos widgets usando ttk
     style = ttk.Style()
     style.configure("TLabel", font=("Arial", 16))
 
@@ -184,7 +161,7 @@ def showDashboard(user_id, user_type, access_token):
     label_dashboard = ttk.Label(frame, text="Bem-vindo ao Clock-In!")
     label_dashboard.pack()
 
-    if user_type == 1:  # Se o tipo de usuário for 1, exibir a lista de usuários que bateram o ponto
+    if user_type == 1:
         people = getpeopleClockIn()
         if people:
             label_people = ttk.Label(
@@ -209,8 +186,6 @@ def showDashboard(user_id, user_type, access_token):
 
     window.mainloop()
 
-# Função para obter a lista de usuários que bateram o ponto
-
 
 def getpeopleClockIn():
     cursor = db.cursor()
@@ -219,36 +194,26 @@ def getpeopleClockIn():
     people = cursor.fetchall()
     return people
 
-# Função para registrar o ponto de um usuário
 
-
-def clockIn(user_id):
+def clockIn(user_id, date, justification=None):
     cursor = db.cursor()
 
-    # Obter a data e hora atual
-    now = datetime.now()
-    date = now.strftime("%Y-%m-%d %H:%M:%S")
-
-    # Inserir o registro do ponto
     cursor.execute(
-        "INSERT INTO clockIn (idEnrollment, date) VALUES (%s, %s)", (user_id, date))
+        "INSERT INTO clockIn (idEnrollment, date, justification) VALUES (%s, %s, %s)",
+        (user_id, date, justification)
+    )
     db.commit()
-    messagebox.showinfo("Ponto Registrado",
-                        "Ponto registrado com sucesso!")
-
-# Função para exportar os dados para uma planilha do Excel
+    messagebox.showinfo("Ponto Registrado", "Ponto registrado com sucesso!")
 
 
 def exportData(people):
     if people:
-        # Criar um DataFrame do Pandas com os dados
         data = {
             "Usuários que bateram o ponto": [user[0] for user in people],
             "Data": [user[1] for user in people]
         }
         df = pd.DataFrame(data)
 
-        # Salvar o DataFrame no arquivo Excel
         filename = "data.xlsx"
         df.to_excel(filename, index=False)
         messagebox.showinfo(
@@ -256,31 +221,22 @@ def exportData(people):
     else:
         messagebox.showinfo("Exportar Dados", "Nenhum dado para exportar.")
 
-# Função para abrir o dashboard após o login para funcionários
-
 
 def showEmployeeDashboard(window, user_id, user_type, access_token):
     window.title("Dashboard - Funcionário")
 
-    # Resto do código para a interface do funcionário
-
-    # Adicione uma opção de seleção de contrato
     label_contract = ttk.Label(window, text="Selecione o contrato:")
     label_contract.pack()
 
-    # Suponha que você tenha uma lista de contratos disponíveis para o funcionário
     contracts = getEmployeeContracts(user_id)
     combo_contract = ttk.Combobox(window, values=contracts)
     combo_contract.pack()
 
-    # Botão para registrar o ponto no contrato selecionado
     button_clock_in = ttk.Button(
         window, text="Bater ponto", command=lambda: clockIn(user_id, combo_contract.get()))
     button_clock_in.pack()
 
     window.mainloop()
-
-# Função para obter a lista de contratos disponíveis para um funcionário
 
 
 def getEmployeeContracts(user_id):
@@ -290,15 +246,10 @@ def getEmployeeContracts(user_id):
     contracts = cursor.fetchall()
     return [contract[0] for contract in contracts]
 
-# Função para abrir o dashboard após o login para gestores
-
 
 def showManagerDashboard(window, user_id, user_type, access_token):
     window.title("Dashboard - Gestor")
 
-    # Resto do código para a interface do gestor
-
-    # Permita que o gestor visualize a entidade que ele gerencia
     entities = getManagerEntities(user_id)
     if entities:
         label_entities = ttk.Label(
@@ -315,8 +266,6 @@ def showManagerDashboard(window, user_id, user_type, access_token):
 
     window.mainloop()
 
-# Função para obter a lista de entidades gerenciadas por um gestor
-
 
 def getManagerEntities(user_id):
     cursor = db.cursor()
@@ -325,22 +274,39 @@ def getManagerEntities(user_id):
     entities = cursor.fetchall()
     return [entity[0] for entity in entities]
 
-# Função para gerar um token de acesso
-
 
 def generateAccessToken():
-    # Tamanho desejado do token
     token_length = 32
-
-    # Caracteres permitidos para o token (alfanuméricos)
     token_characters = string.ascii_letters + string.digits
-
-    # Gera o token aleatório
     token = ''.join(secrets.choice(token_characters)
                     for _ in range(token_length))
-
     return token
 
 
-# Chama a função ISignIn() para iniciar o aplicativo
+def createEntity(entityName, is_admin=False):
+    cursor = db.cursor()
+
+    if is_admin:
+        # Verifica se a entidade já existe no banco de dados
+        cursor.execute(
+            "SELECT * FROM entity WHERE entityName = %s", (entityName,))
+        existing_entity = cursor.fetchone()
+
+        if existing_entity:
+            print("Entidade já existe. Não é possível criar a entidade.")
+            return
+
+    cursor.execute(
+        "INSERT INTO entity (entityName) VALUES (%s)", (entityName,))
+    db.commit()
+
+    # Obter o ID da entidade recém-criada
+    cursor.execute("SELECT LAST_INSERT_ID()")
+    entity_id = cursor.fetchone()[0]
+
+    return entity_id
+
+
 ISignIn()
+createUser("admin", "admin", EnrollmentType.isAdmin,
+           generateAccessToken(), createEntity('base'))

@@ -15,8 +15,8 @@ CREATE TABLE IF NOT EXISTS enrollment (
     idPeople INT NOT NULL,
     idEntity INT NOT NULL,
     type ENUM('isAdmin', 'isManager', 'isEmployee') NOT NULL,
-    FOREIGN KEY (idPeople) REFERENCES people(id) ON DELETE NO ACTION,
-    FOREIGN KEY (idEntity) REFERENCES entity(id) ON DELETE NO ACTION
+    KEY (idPeople),
+    KEY (idEntity)
 );
 
 
@@ -24,5 +24,5 @@ CREATE TABLE IF NOT EXISTS clockIn (
     id INT AUTO_INCREMENT PRIMARY KEY,
     idEnrollment INT NOT NULL,
     date VARCHAR(255) NOT NULL,
-    FOREIGN KEY (idEnrollment) REFERENCES enrollment(id)
+    KEY (idEnrollment)
 );
