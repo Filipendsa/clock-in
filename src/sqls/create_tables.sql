@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS enrollment (
     id INT AUTO_INCREMENT PRIMARY KEY,
     idPeople INT NOT NULL,
     idEntity INT NOT NULL,
-    type ENUM('isAdmin', 'isManager', 'isEmployee') NOT NULL,
+    type INT NOT NULL,
     KEY (idPeople),
     KEY (idEntity)
 );
