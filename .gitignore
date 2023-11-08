@@ -1,4 +1,4 @@
 /ssl/cacert.pem
 /.env
-/.attendance_report.xlsx
-/.data.xlsx
+/attendance_report.xlsx
+/data.xlsx
