@@ -32,6 +32,8 @@ def ISignIn():
     window = tk.Tk()
     window.title("Login")
 
+    # create_user(window, 'admin', 'admin', 0,
+    #             generate_access_token(), create_entity('unasp'))
     style = ttk.Style()
     style.configure("TLabel", font=("Arial", 12))
     style.configure("TEntry", font=("Arial", 12))
@@ -61,7 +63,7 @@ def ISignIn():
 # Função para criar usuário
 
 
-def create_user(peopleName, password, user_type, access_token, idEntity, is_admin=True):
+def create_user(window, peopleName, password, user_type, access_token, idEntity, is_admin=True):
     cursor = db.cursor()
     if is_admin:
         cursor.execute(
@@ -90,6 +92,8 @@ def create_user(peopleName, password, user_type, access_token, idEntity, is_admi
         (user_id, idEntity, user_type)
     )
     db.commit()
+    messagebox.showinfo("Login", "Usuário criado com sucesso!")
+    window.destroy()
 
 # Função para criar entidade
 
@@ -148,6 +152,13 @@ def get_people_clock_in():
     people = cursor.fetchall()
     return people
 
+
+def get_people():
+    cursor = db.cursor()
+    cursor.execute(
+        "SELECT p.peopleName, p.id FROM people p INNER JOIN enrollment e ON e.idPeople = p.id")
+    people = cursor.fetchall()
+    return people
 # Função para gerar um relatório de ponto
 
 
@@ -228,19 +239,40 @@ def show_dashboard(user_id, user_type, enrollment_id):
     label_dashboard.pack()
 
     if user_type == EnrollmentType.isAdmin.value:
-        people = get_people_clock_in()
-        if people:
+        peopleCl = get_people_clock_in()
+        if peopleCl:
             label_people = ttk.Label(
                 frame, text="Usuários que bateram o ponto:")
             label_people.pack()
 
-            for user in people:
-                label_user = ttk.Label(frame, text=user)
-                label_user.pack()
+            for user_info in peopleCl:
+                user_id = user_info[0]
+                # Display user information
+                label_user = ttk.Label(frame, text=f"User Name: {user_id}")
+                label_user.pack(side=tk.LEFT)
         else:
             label_no_people = ttk.Label(
                 frame, text="Nenhum usuário bateu o ponto.")
             label_no_people.pack()
+        peopleEn = get_people()
+        if peopleEn:
+            label_people = ttk.Label(
+                frame, text="Todos os contratos de usuários:")
+            label_people.pack()
+            for useren_info in peopleEn:
+                useren_name = useren_info[0]
+                useren_id = useren_info[1]
+                # Display user information
+                label_user = ttk.Label(frame, text=f"User Name: {useren_name}")
+                label_user.pack(side=tk.LEFT)
+
+                button_edit = ttk.Button(
+                    frame, text="Editar", command=lambda useren_id=useren_id: edit_user(useren_id))
+                button_edit.pack(side=tk.RIGHT)
+
+                button_delete = ttk.Button(
+                    frame, text="Excluir", command=lambda useren_id=useren_id: delete_user(useren_id))
+                button_delete.pack(side=tk.RIGHT)
 
         button_generate_report = ttk.Button(
             frame, text="Gerar Relatório", command=lambda: generate_attendance_report(user_type))
@@ -255,6 +287,80 @@ def show_dashboard(user_id, user_type, enrollment_id):
     button_clock_in.pack()
 
     window.mainloop()
+
+# Function to edit a user
+
+
+def edit_user(user_id):
+    window_edit_user = tk.Tk()
+    window_edit_user.title("Editar Usuário")
+
+    style = ttk.Style()
+    style.configure("TLabel", font=("Arial", 12))
+    style.configure("TEntry", font=("Arial", 12))
+    style.configure("TButton", font=("Arial", 12))
+
+    frame = ttk.Frame(window_edit_user, padding=20)
+    frame.pack()
+
+    label_peopleName = ttk.Label(frame, text="Novo Nome do Usuário:")
+    label_peopleName.pack()
+
+    entry_peopleName = ttk.Entry(frame)
+    entry_peopleName.pack()
+
+    label_password = ttk.Label(frame, text="Nova Senha:")
+    label_password.pack()
+
+    entry_password = ttk.Entry(frame, show="*")
+    entry_password.pack()
+
+    label_accessToken = ttk.Label(frame, text="Novo Código de Acesso:")
+    label_accessToken.pack()
+
+    entry_accessToken = ttk.Entry(frame)
+    entry_accessToken.pack()
+
+    button_save_changes = ttk.Button(frame, text="Salvar Alterações", command=lambda: save_user_changes(
+        window_edit_user, user_id, entry_peopleName.get(), entry_password.get(), entry_accessToken.get()))
+    button_save_changes.pack()
+
+    window_edit_user.mainloop()
+
+# Function to save changes to a user
+
+
+def save_user_changes(window_edit_user, user_id, new_peopleName, new_password, new_accessToken):
+    cursor = db.cursor()
+    hashed_password = bcrypt.hashpw(
+        new_password.encode("utf-8"), bcrypt.gensalt())
+
+    cursor.execute("UPDATE people SET peopleName=%s, password=%s, accessToken=%s WHERE id=%s",
+                   (new_peopleName, hashed_password, new_accessToken, user_id))
+    db.commit()
+
+    messagebox.showinfo(
+        "Usuário Editado", "As alterações no usuário foram salvas com sucesso!")
+    window_edit_user.destroy()
+
+# Function to delete a user
+
+
+def delete_user(user_id):
+    confirmation = messagebox.askyesno(
+        "Confirmar Exclusão", "Tem certeza que deseja excluir este usuário?")
+    if confirmation:
+        cursor = db.cursor()
+        cursor.execute(
+            "DELETE FROM enrollment WHERE idPeople=%s", (user_id,))
+        db.commit()
+
+        cursor = db.cursor()
+        cursor.execute("DELETE FROM people WHERE id=%s", (user_id,))
+        db.commit()
+        messagebox.showinfo("Usuário Excluído",
+                            "Usuário excluído com sucesso!")
+
 
 # Função para exibir o painel de controle do gestor
 
@@ -415,18 +521,20 @@ def create_user_interface(window, user_type):
     label_entityName.pack()
 
     entities = get_all_entities()
-    combo_entityName = ttk.Combobox(frame, values=entities)
+
+    combo_entityName = ttk.Combobox(
+        frame, values=[entity[0] for entity in entities], state="readonly")
     combo_entityName.pack()
 
     label_userType = ttk.Label(frame, text="Tipo de Usuário:")
     label_userType.pack()
 
     user_types = get_all_user_types(user_type)
-    combo_userType = ttk.Combobox(frame, values=user_types)
+    combo_userType = ttk.Combobox(frame, values=user_types, state="readonly")
     combo_userType.pack()
 
-    button_create_user = ttk.Button(frame, text="Criar Usuário", command=lambda: create_user(
-        entry_peopleName.get(), entry_password.get(), combo_userType.get(), generate_access_token(), combo_entityName.get()))
+    button_create_user = ttk.Button(frame, text="Criar Usuário", command=lambda: create_user(window,
+                                                                                             entry_peopleName.get(), entry_password.get(), combo_userType.get(), generate_access_token(), combo_entityName.get()))
     button_create_user.pack()
 
     window.mainloop()
@@ -434,9 +542,9 @@ def create_user_interface(window, user_type):
 
 def get_all_entities():
     cursor = db.cursor()
-    cursor.execute("SELECT entityName FROM entity")
+    cursor.execute("SELECT id, entityName FROM entity")
     entities = cursor.fetchall()
-    return [entity[0] for entity in entities]
+    return entities
 
 
 def get_all_user_types(user_type):
