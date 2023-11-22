@@ -10,10 +10,22 @@ import string
 import MySQLdb
 from decouple import config
 from enuns.typeEnum import EnrollmentType
+import sys
 
-# Conexão com o banco de dados
-project_dir = os.path.dirname(os.path.abspath(__file__))
-cert_path = os.path.join(project_dir, "..", "ssl", "cacert.pem")
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except AttributeError:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
+
+# Agora você pode usar a função resource_path para obter o caminho do certificado
+cert_path = resource_path("ssl/cacert.pem")
 
 db = MySQLdb.connect(
     host=config('DB_HOST'),
@@ -33,7 +45,7 @@ def ISignIn():
     window.title("Login")
 
     # create_user(window, 'admin', 'admin', 0,
-    #             generate_access_token(), create_entity('unasp'))
+    #           generate_access_token(), create_entity('unasp'))
     style = ttk.Style()
     style.configure("TLabel", font=("Arial", 12))
     style.configure("TEntry", font=("Arial", 12))
@@ -92,7 +104,8 @@ def create_user(window, peopleName, password, user_type, access_token, idEntity,
         (user_id, idEntity, user_type)
     )
     db.commit()
-    messagebox.showinfo("Login", "Usuário criado com sucesso!")
+    messagebox.showinfo(
+        "Login", "Usuário criado com sucesso!/n Toke: %s", (access_token))
     window.destroy()
 
 # Função para criar entidade
@@ -125,7 +138,7 @@ def create_entity(entityName, is_admin=True):
 def auth_user(window, access_token, password):
     cursor = db.cursor()
     cursor.execute(
-        "SELECT p.id, password, e.id, type FROM people p INNER JOIN enrollment e on p.id = e.idPeople WHERE p.accessToken = %s", (access_token,))
+        "SELECT p.id, p.password, e.id, e.type FROM people p INNER JOIN enrollment e on p.id = e.idPeople WHERE p.accessToken = %s", (access_token,))
     result = cursor.fetchone()
     if result is not None:
         if bcrypt.checkpw(password.encode("utf-8"), result[1].encode("utf-8")):
@@ -249,11 +262,15 @@ def show_dashboard(user_id, user_type, enrollment_id):
                 user_id = user_info[0]
                 # Display user information
                 label_user = ttk.Label(frame, text=f"User Name: {user_id}")
-                label_user.pack(side=tk.LEFT)
+                label_user.pack()
+            button_generate_report = ttk.Button(
+                frame, text="Gerar Relatório", command=lambda: generate_attendance_report(user_type))
+            button_generate_report.pack()
         else:
             label_no_people = ttk.Label(
                 frame, text="Nenhum usuário bateu o ponto.")
             label_no_people.pack()
+
         peopleEn = get_people()
         if peopleEn:
             label_people = ttk.Label(
@@ -263,27 +280,24 @@ def show_dashboard(user_id, user_type, enrollment_id):
                 useren_name = useren_info[0]
                 useren_id = useren_info[1]
                 # Display user information
-                label_user = ttk.Label(frame, text=f"User Name: {useren_name}")
-                label_user.pack(side=tk.LEFT)
+                label_user = ttk.Label(
+                    frame, text=f"User Name: {useren_name}")
+                label_user.pack()
 
                 button_edit = ttk.Button(
                     frame, text="Editar", command=lambda useren_id=useren_id: edit_user(useren_id))
-                button_edit.pack(side=tk.RIGHT)
+                button_edit.pack()
 
                 button_delete = ttk.Button(
                     frame, text="Excluir", command=lambda useren_id=useren_id: delete_user(useren_id))
-                button_delete.pack(side=tk.RIGHT)
-
-        button_generate_report = ttk.Button(
-            frame, text="Gerar Relatório", command=lambda: generate_attendance_report(user_type))
-        button_generate_report.pack()
+                button_delete.pack()
 
     button_clock_in = ttk.Button(
-        window, text="Criar novo usuário", command=lambda: create_user_interface(window, user_type))
+        window, text="Criar novo usuário", command=lambda: create_user_interface(user_type))
     button_clock_in.pack()
 
     button_clock_in = ttk.Button(
-        window, text="Criar nova entidade", command=lambda: create_entity_interface(window))
+        window, text="Criar nova entidade", command=lambda: create_entity_interface())
     button_clock_in.pack()
 
     window.mainloop()
@@ -468,7 +482,8 @@ def show_clock_in_history(user_id, user_type, enrollment_id):
 # Função para obter contratos de funcionários
 
 
-def create_entity_interface(window):
+def create_entity_interface():
+    window = tk.Tk()
     window.title("Criar Entidade")
 
     style = ttk.Style()
@@ -494,7 +509,8 @@ def create_entity_interface(window):
 # Função para criar um usuário como admin através da interface gráfica
 
 
-def create_user_interface(window, user_type):
+def create_user_interface(user_type):
+    window = tk.Tk()
     window.title("Criar Usuário")
 
     style = ttk.Style()

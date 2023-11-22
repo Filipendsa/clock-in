@@ -2,3 +2,5 @@
 /.env
 /attendance_report.xlsx
 /data.xlsx
+/build
+/dist
